@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>タップRPG 完全統合版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{background:#111;color:#fff;font-family:sans-serif;text-align:center;margin:0;padding:20px}
+button,input{font-size:14px;padding:8px 14px;margin:4px}
+#tapBtn{font-size:26px;padding:28px 56px;margin-top:20px}
+.hidden{display:none!important}
+.boss{font-size:72px}
+.player{font-size:60px}
+.hp-bar{width:80%;height:20px;background:#444;margin:10px auto;border-radius:10px;overflow:hidden}
+.hp{height:100%;background:red}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;justify-content:center;align-items:center;z-index:999;font-size:20px;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+
+<h1>🔥 タップRPG 🔥</h1>
+
+<p>
+💰 <span id="coin">0</span>
+　💎 <span id="dia">0</span>
+　⚔ +<span id="atk">0</span>
+</p>
+
+<div class="player" id="player">🙂</div>
+
+<button onclick="drawGacha()">🎰 ガチャ</button>
+<button onclick="draw10()">🎰 10連</button>
+<button onclick="drawDiaGacha()">💎 上位</button>
+<button onclick="drawDia10()">💎 上位10連</button>
+<button onclick="drawDivine()">🌈 新ガチャ</button>
+<button onclick="drawDivine10()">🌈 新ガチャ10連</button>
+<button onclick="showDex()">📖 図鑑</button>
+
+<hr>
+
+<input id="diaNum" type="number" min="1" placeholder="変換数">
+<button onclick="exchangeDia()">💰→💎変換</button>
+
+<hr>
+
+<button onclick="startRush()">🔥 ボスラッシュ</button>
+
+<hr>
+
+<div id="select">
+<h2>ボス選択</h2>
+
+<button onclick="startBattle('スライム',100,'🟢','coin',10)">スライム</button>
+<button onclick="startBattle('スライム王(ダイヤキャラ)',300,'💎','dia',1)">スライム王(ダイヤキャラ)</button>
+
+<button onclick="startBattle('ゴブリン',200,'👺','coin',20)">ゴブリン</button>
+<button onclick="startBattle('ゴブリン商人(ダイヤキャラ)',800,'💎','dia',2)">ゴブリン商人(ダイヤキャラ)</button>
+
+<button onclick="startBattle('オーク',500,'👹','coin',50)">オーク</button>
+<button onclick="startBattle('オーク財宝守り(ダイヤキャラ)',2000,'💎','dia',3)">オーク財宝守り(ダイヤキャラ)</button>
+
+<button onclick="startBattle('ドラゴン',2000,'🐉','coin',200)">ドラゴン</button>
+<button onclick="startBattle('ドラゴン結晶体(ダイヤキャラ)',6000,'💎','dia',5)">ドラゴン結晶体(ダイヤキャラ)</button>
+
+<button onclick="startBattle('神竜',8000,'🐲','coin',800)">神竜</button>
+<button onclick="startBattle('神竜の使徒(ダイヤキャラ)',15000,'💎','dia',10)">神竜の使徒(ダイヤキャラ)</button>
+
+<hr>
+<h3>💀 超高HPボス</h3>
+
+<button onclick="startBattle('虚無のスライム',500000,'⚫','coin',5000)">虚無のスライム</button>
+<button onclick="startBattle('破壊ゴブリン',1200000,'💥','coin',12000)">破壊ゴブリン</button>
+<button onclick="startBattle('狂戦士オーク',3000000,'🔥','coin',35000)">狂戦士オーク</button>
+<button onclick="startBattle('災厄ドラゴン',8000000,'🐉🔥','coin',120000)">災厄ドラゴン</button>
+<button onclick="startBattle('堕天神竜',20000000,'😈🐲','coin',300000)">堕天神竜</button>
+
+</div>
+
+<div id="game" class="hidden">
+<h2 id="bossName"></h2>
+<div class="boss" id="bossIcon"></div>
+<div class="hp-bar"><div class="hp" id="hp"></div></div>
+<p>HP: <span id="hpText"></span></p>
+<p id="timer"></p>
+<button id="tapBtn" onclick="tap()">タップ！</button>
+</div>
+
+<div id="overlay" class="overlay hidden"></div>
+
+<script>
+const coinEl=document.getElementById("coin");
+const diaEl=document.getElementById("dia");
+const atkEl=document.getElementById("atk");
+const overlay=document.getElementById("overlay");
+const timerEl=document.getElementById("timer");
+
+let coin=+localStorage.getItem("coin")||0;
+let dia=+localStorage.getItem("dia")||0;
+let atkBonus=+localStorage.getItem("atkBonus")||0;
+let dex=JSON.parse(localStorage.getItem("dex")||"{}");
+
+function save(){
+localStorage.setItem("coin",coin);
+localStorage.setItem("dia",dia);
+localStorage.setItem("atkBonus",atkBonus);
+localStorage.setItem("dex",JSON.stringify(dex));
+coinEl.textContent=coin;
+diaEl.textContent=dia;
+atkEl.textContent=atkBonus.toFixed(1);
+}
+save();
+
+function show(title,lines){
+overlay.innerHTML=title+"<br>"+lines.join("<br>")+"<br><small>(タップで閉じる)</small>";
+overlay.classList.remove("hidden");
+}
+overlay.onclick=()=>overlay.classList.add("hidden");
+
+/* ===== ガチャ ===== */
+function roll(t){let r=Math.random()*100,s=0;for(const g of t){s+=g[1];if(r<s)return g;}}
+const normal=[["R",50,0.1],["SR",30,0.3],["UR",15,1],["LR",5,2]];
+const diaT=[["UR",60,1.5],["LR",30,3],["DIVINE",10,10]];
+const divineT=[["ディバイン",50,10],["ディバインⅡ",33,100],["ディバインⅢ",17,1000]];
+
+function drawGacha(){if(coin<100)return;coin-=100;const g=roll(normal);atkBonus+=g[2];save();show("🎰 ガチャ結果",[`${g[0]} +${g[2]}`]);}
+function draw10(){if(coin<1000)return;coin-=1000;let r=[];for(let i=0;i<10;i++){const g=roll(normal);atkBonus+=g[2];r.push(`${g[0]} +${g[2]}`);}save();show("🎰 10連結果",r);}
+function drawDiaGacha(){if(dia<1)return;dia--;const g=roll(diaT);atkBonus+=g[2];save();show("💎 上位ガチャ",[`${g[0]} +${g[2]}`]);}
+function drawDia10(){if(dia<10)return;dia-=10;let r=[];for(let i=0;i<10;i++){const g=roll(diaT);atkBonus+=g[2];r.push(`${g[0]} +${g[2]}`);}save();show("💎 上位10連",r);}
+function drawDivine(){if(dia<1000)return;dia-=1000;const g=roll(divineT);atkBonus+=g[2];save();show("🌈 新ガチャ",[`${g[0]} +${g[2]}`]);}
+function drawDivine10(){if(dia<10000)return;dia-=10000;let r=[];for(let i=0;i<10;i++){const g=roll(divineT);atkBonus+=g[2];r.push(`${g[0]} +${g[2]}`);}save();show("🌈 新ガチャ10連",r);}
+
+function exchangeDia(){
+const n=+document.getElementById("diaNum").value;
+if(!n||coin<n*1000)return;
+coin-=n*1000;dia+=n;save();
+show("💱 変換成功",[ `💎 +${n}` ]);
+}
+
+/* ===== 戦闘 & ボスラッシュ ===== */
+let bossHp=0,maxHp=0,reward=0,rewardType="coin";
+let rush=false,rushEnd=0,rushCount=0,rushHp=3000;
+
+function startBattle(n,h,i,t,v){
+rush=false;
+bossHp=maxHp=h;
+reward=v;rewardType=t;
+bossName.textContent=n;
+bossIcon.textContent=i;
+timerEl.textContent="";
+select.classList.add("hidden");
+game.classList.remove("hidden");
+updateHp();
+}
+
+function startRush(){
+rush=true;
+rushCount=0;
+rushHp=3000;
+rushEnd=Date.now()+60000;
+nextRush();
+select.classList.add("hidden");
+game.classList.remove("hidden");
+}
+
+function nextRush(){
+bossHp=maxHp=rushHp;
+bossName.textContent="ラッシュボス "+(rushCount+1);
+bossIcon.textContent="🔥";
+rushHp=Math.floor(rushHp*1.25);
+updateHp();
+}
+
+function tap(){
+bossHp-=1+atkBonus;
+if(bossHp<=0){
+if(rush){
+rushCount++;
+nextRush();
+}else{
+rewardType==="coin"?coin+=reward:dia+=reward;
+save();
+game.classList.add("hidden");
+select.classList.remove("hidden");
+show("🎉 撃破",[rewardType==="coin"?`💰 +${reward}`:`💎 +${reward}`]);
+}
+}
+updateHp();
+}
+
+function updateHp(){
+hpText.textContent=Math.max(0,Math.ceil(bossHp));
+hp.style.width=(bossHp/maxHp*100)+"%";
+}
+
+setInterval(()=>{
+if(!rush)return;
+const t=Math.max(0,Math.ceil((rushEnd-Date.now())/1000));
+timerEl.textContent="残り "+t+" 秒";
+if(t<=0){
+rush=false;
+coin+=rushCount*500;
+save();
+game.classList.add("hidden");
+select.classList.remove("hidden");
+show("🔥 ボスラッシュ終了",[ `討伐数 ${rushCount}`,`💰 +${rushCount*500}` ]);
+}
+},200);
+</script>
+</body>
+</html>
